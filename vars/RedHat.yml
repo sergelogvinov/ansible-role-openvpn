@@ -1,0 +1,7 @@
+---
+
+openvpn_service: openvpn@{{ openvpn_sub_name }}
+openvpn_user: openvpn
+openvpn_group: openvpn
+openvpn_uid: 996
+openvpn_gid: 994

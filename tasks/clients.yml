@@ -1,0 +1,75 @@
+---
+
+- name: Generate Clients CA keys
+  command: openssl req -nodes -new -keyout {{ item }}.key -out {{ item }}.csr -days {{ openvpn_key_days }} -config openssl.cnf
+    chdir="{{ openvpn_keydir }}"
+    creates={{ item }}.key
+  environment:
+    KEY_HOST: "{{ item }}"
+  with_items: "{{ openvpn_clients }}"
+  tags: [openvpn]
+
+- name: Sign Clients keys
+  command: openssl x509 -req -in {{ item }}.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out {{ item }}.crt -extfile openssl.cnf -extensions client -days {{ openvpn_key_days }}
+    chdir="{{ openvpn_keydir }}"
+    creates={{ item }}.crt
+  environment:
+    KEY_HOST: "{{ item }}"
+  with_items: "{{ openvpn_clients }}"
+  tags: [openvpn]
+
+- name: Remove Clients CA Req
+  file: path="{{ openvpn_keydir }}/{{ item }}.csr" state="absent"
+  with_items: "{{ openvpn_clients }}"
+  tags: [openvpn]
+
+- name: register client certs
+  slurp: src="{{ openvpn_keydir }}/{{ item }}.crt"
+  with_items: "{{ openvpn_clients }}"
+  register: client_certs
+  no_log: true
+  tags: [openvpn]
+
+- name: register client keys
+  slurp: src="{{ openvpn_keydir }}/{{ item }}.key"
+  with_items: "{{ openvpn_clients }}"
+  register: client_keys
+  no_log: true
+  tags: [openvpn]
+
+- name: Generate Clients configurations
+  template: src=client.conf.j2 dest={{ openvpn_keydir }}/{{ item.0.item }}.ovpn
+    mode=0600
+  with_together:
+    - "{{ client_certs.results }}"
+    - "{{ client_keys.results }}"
+  no_log: true
+  tags: [openvpn]
+
+- name: Protect clients keys
+  file: path="{{ openvpn_keydir }}/{{ item }}.key" mode=0400
+  with_items: "{{ openvpn_clients }}"
+  tags: [openvpn]
+
+- name: Protect clients crt
+  file: path="{{ openvpn_keydir }}/{{ item }}.crt" mode=0400
+  with_items: "{{ openvpn_clients }}"
+  tags: [openvpn]
+
+- name: Revoke Clients keys
+  command: openssl ca -revoke {{ item }}.crt -config openssl.cnf
+    chdir="{{ openvpn_keydir }}"
+  environment:
+    KEY_HOST: "{{ item }}"
+  register: revoke
+  with_items: "{{ openvpn_clients_revoke }}"
+  ignore_errors: yes
+  tags: [openvpn]
+
+- name: Update Revoke pem
+  command: openssl ca -gencrl -out revoke.crl -crldays 3650 -config openssl.cnf
+    chdir="{{ openvpn_keydir }}"
+  environment:
+    KEY_HOST: "server"
+  when: revoke.changed
+  tags: [openvpn]

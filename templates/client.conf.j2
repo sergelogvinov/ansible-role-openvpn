@@ -1,0 +1,55 @@
+{%- set client=item -%}
+
+client
+dev {{ openvpn_dev_type }}
+proto {% if openvpn_client_proto %}{{ openvpn_client_proto }}{% else %}{{ openvpn_proto }}
+{% endif %}
+
+remote {{ openvpn_host }} {{ openvpn_port }}
+resolv-retry {{ openvpn_resolv_retry }}
+
+ping 10
+ping-restart 120
+
+nobind
+persist-key
+persist-tun
+
+{% if openvpn_compress -%}
+allow-compression {{ openvpn_compress }}
+comp-lzo
+{% endif %}
+data-ciphers AES-256-GCM:{{ openvpn_cipher }}
+remote-cert-tls server
+auth-nocache
+
+verb {{ openvpn_verb }}
+mute 4
+mute-replay-warnings
+#user nobody
+#group nobody
+{% for option in openvpn_client_options %}
+{{ option }}
+{% endfor %}
+
+#script-security 3
+#up ./{{ openvpn_sub_name }}.up
+
+key-direction 1
+{% if openvpn_verify_cn %}
+verify-x509-name server name
+{% endif %}
+<ca>
+{{ ca_cert.content|b64decode -}}
+</ca>
+{% if openvpn_tls_auth -%}
+<tls-auth>
+{{ tls_auth.content|b64decode -}}
+</tls-auth>
+{% endif %}
+<cert>
+{{ item.0.content|b64decode -}}
+</cert>
+<key>
+{{ item.1.content|b64decode -}}
+</key>

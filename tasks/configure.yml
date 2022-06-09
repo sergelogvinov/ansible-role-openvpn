@@ -1,0 +1,127 @@
+---
+
+- name: Prepare directory
+  file:
+    path: "{{ item.path }}"
+    owner: "{{ openvpn_user }}"
+    group: "{{ item.group }}"
+    mode: 0750
+    state: directory
+  when: ansible_user_id == 'root'
+  with_items:
+    - { path: "{{ openvpn_etcdir }}/{{ openvpn_sub_name }}",  group: "{{ openvpn_group }}" }
+    - { path: "{{ openvpn_keydir }}",                         group: root }
+    - { path: "{{ openvpn_userdir }}",                        group: "{{ openvpn_group }}" }
+
+- name: Create openssl.cnf file
+  template: src=openssl.cnf.j2 dest={{ openvpn_keydir }}/openssl.cnf mode=0400
+
+- copy:
+    content: "{{ item.content }}"
+    dest: "{{ openvpn_keydir }}/{{ item.file }}"
+    mode: 0640
+    force: no
+  with_items:
+    - { file: "index.txt", content: "" }
+
+- copy:
+    content: "#!/bin/sh\n\n"
+    dest: "{{ openvpn_etcdir }}/{{ openvpn_sub_name }}/{{ openvpn_sub_name }}.up"
+    mode: 0755
+    force: no
+
+- name: Copy SSL certificate data
+  copy:
+    content: "{{ item.content }}"
+    dest: "{{ item.dest }}"
+    mode: 0400
+  when: openvpn_ca_data is defined and openvpn_certs_data is defined
+  with_items:
+    - { content: "{{ openvpn_ca_data|default }}",     dest: "{{ openvpn_keydir }}/ca.key" }
+    - { content: "{{ openvpn_certs_data|default }}",  dest: "{{ openvpn_keydir }}/ca.crt" }
+  no_log: true
+  register: openvpn_ca_files
+  tags: [openvpn]
+
+- name: Copy tls-auth data
+  copy:
+    content: "{{ item.content }}"
+    dest: "{{ item.dest }}"
+    mode: 0400
+  when: openvpn_tls_auth and openvpn_tls_data is defined
+  with_items:
+    - { content: "{{ openvpn_tls_data|default }}", dest: "{{ openvpn_keydir }}/ta.key" }
+  no_log: true
+
+- name: Generate Root CA key
+  command: openssl req -x509 -nodes -new -set_serial 0 -keyout ca.key -out ca.crt -days 3650 -config openssl.cnf
+    chdir="{{ openvpn_keydir }}"
+    creates=ca.key
+  environment:
+    KEY_HOST: "OpenVPN-Root-CA"
+
+- file: path={{ openvpn_keydir }}/{{ item }} state=absent
+  with_items:
+    - server.csr
+    - server.crt
+    - server.key
+  when: openvpn_ca_files.changed
+
+- name: Generate server key
+  command: openssl req -nodes -new -keyout server.key -out server.csr -days 3650 -extensions server -config openssl.cnf
+    chdir="{{ openvpn_keydir }}"
+    creates=server.key
+  environment:
+    KEY_HOST: "server"
+
+- name: Sign server key
+  #command: openssl ca -batch -in server.csr -out server.crt -days 3650 -extensions server -config openssl.cnf
+  command: openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -extfile openssl.cnf -extensions server -days 3650
+    chdir="{{ openvpn_keydir }}"
+    creates=server.crt
+  environment:
+    KEY_HOST: "server"
+
+- file: path={{ openvpn_keydir }}/server.csr state=absent
+
+- name: register server certs
+  slurp: src="{{ openvpn_keydir }}/server.crt"
+  register: server_cert
+  no_log: true
+  tags: [config]
+
+- name: register server keys
+  slurp: src="{{ openvpn_keydir }}/server.key"
+  register: server_key
+  no_log: true
+  tags: [config]
+
+- name: Generate dh key
+  command: openssl dhparam -out dh{{ openvpn_key_size }}.pem {{openvpn_key_size}}
+    chdir="{{ openvpn_keydir }}"
+    creates=dh{{ openvpn_key_size }}.pem
+
+- name: register server dh
+  slurp: src="{{ openvpn_keydir }}/dh{{ openvpn_key_size }}.pem"
+  register: server_dh
+  no_log: true
+  tags: [config]
+
+- name: Generate tls-auth key
+  command: openvpn --genkey --secret ta.key
+    chdir="{{ openvpn_keydir }}"
+    creates="ta.key"
+  when: openvpn_tls_auth
+
+- name: Protect server keys
+  file: path="{{ openvpn_keydir }}/{{ item }}" mode=0400
+  with_items:
+    - ca.crt
+    - ca.key
+    - dh2048.pem
+    - server.crt
+    - server.key
+
+- name: Protect tls-auth key
+  file: path="{{ openvpn_keydir }}/ta.key" mode=0400
+  when: openvpn_tls_auth

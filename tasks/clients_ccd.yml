@@ -1,0 +1,8 @@
+---
+
+- name: Configure DEFAULT ccd-config
+  template:
+    src: ccd-default.j2
+    dest: "{{ openvpn_ccd_folder }}/DEFAULT"
+    owner: "{{ openvpn_user }}"
+  tags: [config]

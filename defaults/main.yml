@@ -1,0 +1,49 @@
+---
+
+openvpn_enabled: yes                                # The role is enabled
+
+openvpn_etcdir: /etc/openvpn
+openvpn_sub_name: net
+openvpn_keydir:   "{{ openvpn_etcdir }}/{{ openvpn_sub_name }}/keys"
+openvpn_userdir:  "{{ openvpn_etcdir }}/{{ openvpn_sub_name }}/users"
+openvpn_user: openvpn
+openvpn_group: openvpn
+
+openvpn_host: "{{ inventory_hostname }}"              # The server address
+openvpn_port: 1194
+openvpn_proto: udp
+openvpn_client_proto: ~
+openvpn_dev: tap
+openvpn_dev_type: tap
+openvpn_server: 172.30.254.0 255.255.255.0          # Set empty for skip
+openvpn_server_v6: ''
+openvpn_max_clients: 100
+openvpn_logdir: /var/log                            # Log's directory
+openvpn_keepalive: "10 120"
+openvpn_compress: asym                              # Enable compression
+openvpn_cipher: AES-256-CBC                         # Encryption algorithm
+openvpn_mssfix: 1460
+openvpn_status: "{{ openvpn_sub_name }}.status"
+openvpn_verb: 3
+openvpn_tls_auth : True                             # Enable perfect forward secracyxy
+openvpn_resolv_retry: infinite
+openvpn_client_to_client: false
+openvpn_server_options: []
+openvpn_client_options: []
+openvpn_client_ccd_default: []
+
+openvpn_ccd_folder: "{{ openvpn_userdir }}"
+
+openvpn_key_country: US
+openvpn_key_province: CA
+openvpn_key_city: SanFrancisco
+openvpn_key_org: Testing
+openvpn_key_email: me@myhost.mydomain
+openvpn_key_size: 2048
+openvpn_key_days: 3650
+openvpn_verify_cn: false
+openvpn_cert_distinguished: 'req_distinguished_name'
+#openvpn_cert_distinguished: 'cn_only'
+
+openvpn_clients_revoke: []
+openvpn_clients: []

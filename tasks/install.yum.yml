@@ -1,0 +1,12 @@
+---
+
+- name: Add repository epel-release
+  yum:
+    name: epel-release
+
+- name: Install openvpn
+  yum:
+    name: "{{ item }}"
+  with_items:
+    - openvpn
+    - openssl

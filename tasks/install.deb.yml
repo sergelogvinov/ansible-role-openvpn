@@ -1,0 +1,6 @@
+---
+
+- name: Install openvpn (Debian)
+  apt: name={{item}} force=yes
+  with_items: [openvpn, openssl]
+

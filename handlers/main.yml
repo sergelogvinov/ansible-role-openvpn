@@ -1,0 +1,5 @@
+---
+
+- name: openvpn restart
+  service: name={{openvpn_service}} state=restarted
+  when: ansible_os_family != 'Darwin'

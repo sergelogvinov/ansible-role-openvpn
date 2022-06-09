@@ -1,0 +1,7 @@
+---
+
+openvpn_service: openvpn
+openvpn_user: _openvpn
+openvpn_group: _openvpn
+openvpn_uid: 577
+openvpn_gid: 577

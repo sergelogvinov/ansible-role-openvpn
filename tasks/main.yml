@@ -1,0 +1,53 @@
+---
+
+- name: Include variables.
+  include_vars: "{{item}}"
+  with_first_found:
+    - "{{ ansible_os_family }}.yml"
+    - "common-default.yml"
+  tags: [openvpn,config]
+
+- import_tasks: install.deb.yml
+  when: ansible_os_family == 'Debian'
+  tags: [openvpn]
+
+- import_tasks: install.yum.yml
+  when: ansible_os_family == 'RedHat'
+  tags: [openvpn]
+
+- group: name="{{ openvpn_group }}" gid={{ openvpn_gid }} state=present
+  when: ansible_os_family == 'Debian'
+- user: name="{{ openvpn_user }}" uid="{{ openvpn_uid }}" shell=/bin/false group="{{ openvpn_group }}" home=/var/openvpn createhome=yes
+  when: ansible_os_family == 'Debian'
+
+- import_tasks: configure.yml
+  when: openvpn_enabled
+
+- name: register ca key
+  slurp: src="{{ openvpn_keydir }}/ca.crt"
+  register: ca_cert
+  no_log: true
+  tags: [config,openvpn]
+
+- name: register tls-auth key
+  slurp: src="{{ openvpn_keydir }}/ta.key"
+  register: tls_auth
+  no_log: true
+  tags: [config,openvpn]
+
+- import_tasks: clients.yml
+  when: openvpn_enabled and openvpn_clients.0 is defined
+
+- import_tasks: clients_ccd.yml
+  when: openvpn_enabled and openvpn_ccd_folder != ''
+
+- name: Configure server
+  template: src=server.conf.j2 dest={{ openvpn_etcdir }}/{{ openvpn_sub_name }}.conf
+  when: openvpn_enabled
+  no_log: true
+  notify: [openvpn restart]
+  tags: [config]
+
+- name: Ensure OpenVPN is started
+  service: name={{ openvpn_service }} state=started enabled=yes
+  when: openvpn_enabled and ansible_os_family != 'Darwin'
